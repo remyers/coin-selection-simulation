@@ -1,0 +1,62 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "targets-cg-rm-bbtiny",
+            "type": "python",
+            "request": "launch",
+            "cwd": "/home/remyers/github/coin-selection-simulation",
+            "program": "scripts/simulation.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args":["--extra_config","utxotargetsfile=/home/remyers/github/coin-selection-simulation/utxotargets.json","--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim","--scenario","scenarios/bustabit-2019-2020-tiny.csv","/home/remyers/github/bitcoin-core/test/config.ini","results/"],
+            "sudo": true
+        },
+        {
+            "name": "cg-rm-bbtiny",
+            "type": "python",
+            "request": "launch",
+            "cwd": "/home/remyers/github/coin-selection-simulation",
+            "program": "scripts/simulation.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args":["--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim1","--scenario","scenarios/bustabit-2019-2020-tiny.csv","/home/remyers/github/bitcoin-core/test/config.ini","results/"],
+            "sudo": true
+        },
+        {
+            "name": "master-bbtiny",
+            "type": "python",
+            "request": "launch",
+            "cwd": "/home/remyers/github/coin-selection-simulation",
+            "program": "scripts/simulation.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args":["--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim","--scenario","scenarios/bustabit-2019-2020-tiny.csv","/home/remyers/github/bitcoin/test/config.ini","results/"],
+            "sudo": true
+        },
+        {
+            "name": "(gdb) Attach",
+            "type": "cppdbg",
+            "request": "attach",
+            "program": "/home/remyers/github/bitcoin-core/src/bitcoind",
+            "MIMode": "gdb",
+            "sourceFileMap":{"./src":"/home/remyers/github/bitcoin-core/src"},
+            "processId":"${command:pickProcess}",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        }
+    ]
+}

@@ -118,11 +118,11 @@ def rpc_url(datadir, i, chain, rpchost):
 ################
 
 
-def initialize_datadir(dirname, n, chain, disable_autoconnect=True):
+def initialize_datadir(dirname, n, chain, extra_config="", disable_autoconnect=True):
     datadir = get_datadir_path(dirname, n)
     if not os.path.isdir(datadir):
         os.makedirs(datadir)
-    write_config(os.path.join(datadir, "bitcoin.conf"), n=n, chain=chain, disable_autoconnect=disable_autoconnect)
+    write_config(os.path.join(datadir, "bitcoin.conf"), n=n, chain=chain, extra_config=extra_config, disable_autoconnect=disable_autoconnect)
     os.makedirs(os.path.join(datadir, 'stderr'), exist_ok=True)
     os.makedirs(os.path.join(datadir, 'stdout'), exist_ok=True)
     return datadir
@@ -163,7 +163,7 @@ def write_config(config_path, *, n, chain, extra_config="", disable_autoconnect=
         f.write("unsafesqlitesync=1\n")
         if disable_autoconnect:
             f.write("connect=0\n")
-        f.write(extra_config)
+        f.write(extra_config+"\n")
 
 
 def get_datadir_path(dirname, n):

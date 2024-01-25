@@ -152,6 +152,20 @@ class CoinSelectionSimulation(Simulation):
             else 0
         )
 
+        # Output counts
+        output_sizes = sorted(self.output_sizes)
+        max_output_size = Decimal(output_sizes[-1]) if len(output_sizes) > 0 else 0
+        mean_output_size = (
+            (Decimal(mean(output_sizes)) * Decimal(1))
+            if len(output_sizes) > 0
+            else 0
+        )
+        stdev_output_size = (
+            (Decimal(stdev(output_sizes)) * Decimal(1))
+            if len(output_sizes) > 0
+            else 0
+        )
+
         # UTXO stats
         mean_utxo_set_size = (
             (Decimal(mean(self.utxo_set_sizes)) * Decimal(1))
@@ -196,6 +210,9 @@ class CoinSelectionSimulation(Simulation):
             str(max_input_size),
             str(mean_input_size),
             str(stdev_input_size),
+            str(max_output_size),
+            str(mean_output_size),
+            str(stdev_output_size),
             usage_str,
         ]
         result_str = f"| {' | '.join(result)} |"
@@ -320,6 +337,9 @@ class CoinSelectionSimulation(Simulation):
             "Max Input Size",
             "Mean Input Size",
             "Std. Dev. of Input Size",
+            "Max Output Size",
+            "Mean Output Size",
+            "Std. Dev. of Output Size",
             "Usage",
         ]
         header = f"| {' | '.join(fields)} |"
@@ -348,6 +368,7 @@ class CoinSelectionSimulation(Simulation):
         self.no_change = defaultdict(int)
         self.withdraws = 0
         self.input_sizes = []
+        self.output_sizes = []
         self.utxo_set_sizes = []
         self.count_change = 0
         self.count_received = 0
@@ -530,18 +551,20 @@ class CoinSelectionSimulation(Simulation):
                         payment_stats["real_feerate"] = fee / dec_tx["vsize"] * 1000
                         # Spent utxo counts and input info
                         num_in = len(dec["inputs"])
+                        num_out = len(dec["outputs"])
                         self.count_sent += num_in
                         self.input_sizes.append(num_in)
+                        self.output_sizes.append(len(dec["outputs"]))
                         payment_stats["num_inputs"] = num_in
-                        payment_stats["num_outputs"] = len(dec["outputs"])
+                        payment_stats["num_outputs"] = num_out
                         # Change info
                         payment_stats["change_amount"] = None
                         if change_pos is not None and change_pos != -1:
-                            assert len(dec["tx"]["vout"]) == 2
+                            assert len(dec["tx"]["vout"]) >= 2
                             change_out = dec["tx"]["vout"][change_pos]
                             payment_stats["change_amount"] = change_out["value"]
                             self.change_vals.append(change_out["value"])
-                            self.count_change += 1
+                            self.count_change += num_out-1
                         else:
                             assert len(dec["tx"]["vout"]) == 1
                             self.no_change[algo] += 1
@@ -551,7 +574,7 @@ class CoinSelectionSimulation(Simulation):
                         )
                         dw.writerow(payment_stats)
                         self.log.debug(
-                            f"Op {self.ops} Sent {self.withdraws}th withdraw of {value} BTC using {num_in} inputs with fee {fee} ({feerate} BTC/kvB) and algo {algo}"
+                            f"Op {self.ops} Sent {self.withdraws}th withdraw of {value} BTC using {num_in} inputs and {num_out} outputs with fee {fee} ({feerate} BTC/kvB) and algo {algo}"
                         )
                         self.withdraws += 1
                     except JSONRPCException as e:
