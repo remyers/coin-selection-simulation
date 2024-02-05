@@ -374,6 +374,7 @@ class CoinSelectionSimulation(Simulation):
         self.count_received = 0
         self.unec_utxos = 0
         self.algo_counts = defaultdict(int)
+        self.pending_txs = []
         with open(
             os.path.join(results_dir, "full_results.csv"), "a+"
         ) as full_res, open(
@@ -426,6 +427,7 @@ class CoinSelectionSimulation(Simulation):
                 # Make deposit or withdrawal
                 value = Decimal(val_str.strip())
                 feerate = Decimal(fee_str.strip())
+                lock_vouts = []
                 if self.options.weights:
 
                     # choose a random address type based on the weights provided by the user
@@ -434,8 +436,9 @@ class CoinSelectionSimulation(Simulation):
                 if value > 0:
                     try:
                         # deposit
-                        self.funder.sendall(
-                            [{self.tester.getnewaddress(): value}, withdraw_address]
+                        self.funder.send(
+                            outputs=[{self.tester.getnewaddress(): value}], 
+                            options={"change_address": withdraw_address}
                         )
                         self.count_received += 1
                         self.log.debug(
@@ -445,6 +448,12 @@ class CoinSelectionSimulation(Simulation):
                         self.log.warning(
                             f"Failure on op {self.ops} with funder sending {value} with error {str(e)}"
                         )
+                    # Make sure all tracepoint events are consumed
+                    try:
+                        while True:
+                            bpf["coin_selection_events"].pop()
+                    except KeyError:
+                        pass
                 if value < 0:
                     try:
                         payment_stats = {"id": self.withdraws}
@@ -463,13 +472,20 @@ class CoinSelectionSimulation(Simulation):
                         # if weights are provided, then choose an address type based on the provided distribution
                         psbt = self.tester.walletcreatefundedpsbt(
                             outputs=[{withdraw_address: value}],
-                            options={"feeRate": feerate},
+                            options={"feeRate": feerate, "lockUnspents": True},
                         )["psbt"]
                         psbt = self.tester.walletprocesspsbt(psbt)["psbt"]
                         # Send the tx
                         psbt = self.tester.finalizepsbt(psbt, False)["psbt"]
                         tx = self.tester.finalizepsbt(psbt)["hex"]
-                        self.tester.sendrawtransaction(tx)
+                        # delay confirmation of tx
+                        if (self.options.delay_confirmation > 0):
+                            self.pending_txs.append(tx)
+                            if (len(self.pending_txs) > self.options.delay_confirmation):
+                                confirmed_tx = self.pending_txs.pop(0)
+                                self.tester.sendrawtransaction(confirmed_tx)
+                        else:
+                            self.tester.sendrawtransaction(tx)
                         # Get data from the tracepoints
                         algo = None
                         change_pos = None
@@ -577,6 +593,7 @@ class CoinSelectionSimulation(Simulation):
                             f"Op {self.ops} Sent {self.withdraws}th withdraw of {value} BTC using {num_in} inputs and {num_out} outputs with fee {fee} ({feerate} BTC/kvB) and algo {algo}"
                         )
                         self.withdraws += 1
+
                     except JSONRPCException as e:
                         # Make sure all tracepoint events are consumed
                         try:

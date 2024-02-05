@@ -5,6 +5,15 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "generate-scenario-from-utxotargets",
+            "type": "python",
+            "request": "launch",
+            "program": "scripts/generate-scenario-from-utxotargets.py",
+            "args": ["utxotargets.json", "scenarios/bustabit-2019-2020-tiny.csv", "output.csv"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+        },
+        {
             "name": "targets-cg-rm-bbtiny",
             "type": "python",
             "request": "launch",
@@ -12,7 +21,18 @@
             "program": "scripts/simulation.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args":["--extra_config","utxotargetsfile=/home/remyers/github/coin-selection-simulation/utxotargets.json","--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim","--scenario","scenarios/bustabit-2019-2020-tiny.csv","/home/remyers/github/bitcoin-core/test/config.ini","results/"],
+            "args":["--delay_confirmation","100","--extra_config","utxotargetsfile=/home/remyers/github/coin-selection-simulation/utxotargets.json","--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim","--scenario","scenarios/bustabit-2019-2020-tiny-utxotargets.csv","/home/remyers/github/bitcoin-core/test/config.ini","results/"],
+            "sudo": true
+        },
+        {
+            "name": "targets-presplit-cg-rm-bbtiny",
+            "type": "python",
+            "request": "launch",
+            "cwd": "/home/remyers/github/coin-selection-simulation",
+            "program": "scripts/simulation.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args":["--delay_confirmation","100","--extra_config","utxotargetsfile=/home/remyers/github/coin-selection-simulation/utxotargets.json","--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim","--scenario","scenarios/bustabit-2019-2020-tiny-utxotargets-presplit.csv","/home/remyers/github/bitcoin-core/test/config.ini","results/"],
             "sudo": true
         },
         {
@@ -23,7 +43,18 @@
             "program": "scripts/simulation.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args":["--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim1","--scenario","scenarios/bustabit-2019-2020-tiny.csv","/home/remyers/github/bitcoin-core/test/config.ini","results/"],
+            "args":["--delay_confirmation","100","--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim1","--scenario","scenarios/bustabit-2019-2020-tiny-utxotargets.csv","/home/remyers/github/bitcoin-core/test/config.ini","results/"],
+            "sudo": true
+        },
+        {
+            "name": "presplit-cg-rm-bbtiny",
+            "type": "python",
+            "request": "launch",
+            "cwd": "/home/remyers/github/coin-selection-simulation",
+            "program": "scripts/simulation.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args":["--delay_confirmation","100","--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim1","--scenario","scenarios/bustabit-2019-2020-tiny-utxotargets-presplit.csv","/home/remyers/github/bitcoin-core/test/config.ini","results/"],
             "sudo": true
         },
         {
@@ -34,7 +65,7 @@
             "program": "scripts/simulation.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args":["--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim","--scenario","scenarios/bustabit-2019-2020-tiny.csv","/home/remyers/github/bitcoin/test/config.ini","results/"],
+            "args":["--delay_confirmation","100","--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim","--scenario","scenarios/bustabit-2019-2020-tiny.csv","/home/remyers/github/bitcoin/test/config.ini","results/"],
             "sudo": true
         },
         {
@@ -57,6 +88,15 @@
                     "ignoreFailures": true
                 }
             ]
-        }
+        },
+        {
+            "name": "utxos_to_scatterplot.py",
+            "type": "python",
+            "request": "launch",
+            "program": "scripts/utxos_to_scatterplot.py",
+            "args": ["utxos-targets.csv","--group","100"],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+        },
     ]
 }
