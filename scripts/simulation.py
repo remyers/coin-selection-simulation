@@ -286,7 +286,7 @@ class CoinSelectionSimulation(Simulation):
         }
 
         # set this as the default. if weights are provided by the user, we will update this when creating the psbt
-        withdraw_address = withdraw_addresses["bech32"]
+        withdraw_address = withdraw_addresses["bech32m"]
         if self.options.scenario:
             self.scenario_name = os.path.splitext(os.path.basename(self.options.scenario))[0]
 
@@ -424,6 +424,24 @@ class CoinSelectionSimulation(Simulation):
                     self.log.info(f"{self.ops} operations performed so far")
                     self.log_sim_results(res, sum_csvw)
 
+                # add funding payments to reach minimum utxos threshold
+                before_utxos = self.tester.listunspent()
+                if (len(before_utxos) < self.options.min_utxos):
+                    try:
+                        # deposit
+                        self.funder.send(
+                            outputs=[{self.tester.getnewaddress(): self.options.payment_amount}], 
+                            options={"change_address": withdraw_address}
+                        )
+                        self.log.debug(
+                            f"Op {self.ops} UTXOs below minimum, added deposit of {self.options.payment_amount} BTC"
+                        )
+                        self.funder.generatetoaddress(1, gen_addr)
+                    except JSONRPCException as e:
+                        self.log.warning(
+                            f"Failure on op {self.ops} with funder sending {self.options.payment_amount} with error {str(e)}"
+                        )
+                
                 # Make deposit or withdrawal
                 value = Decimal(val_str.strip())
                 feerate = Decimal(fee_str.strip())
@@ -458,7 +476,6 @@ class CoinSelectionSimulation(Simulation):
                     try:
                         payment_stats = {"id": self.withdraws}
                         # Before listunspent
-                        before_utxos = self.tester.listunspent()
                         payment_stats["before_num_utxos"] = len(before_utxos)
                         utxo_amounts = [str(u["amount"]) for u in before_utxos]
                         utxos_dw.writerow(

@@ -47,11 +47,9 @@ parser = argparse.ArgumentParser(description="Generates a simulation scenario fr
 parser.add_argument("targets", help="JSON file to import utxo targets from")
 parser.add_argument("feerates", help="Fee rates csv file (btc), note: uses last value on each line.")
 parser.add_argument("filename", help="File to output to")
-parser.add_argument("--receive_chance", default=0.001, type=float, help="chance of receiving vs sending a payment per time point, default: 0.01 (ie. 1:100)")
+parser.add_argument("--receive_chance", default=0.001, type=float, help="chance of receiving vs sending a payment per time point, default: 0.001 (ie. 1:1000)")
 parser.add_argument("--receive_min", default=1000, type=int, help="minimium receive amount (sats), default: 1000")
 parser.add_argument("--receive_max", default=10000000, type=int, help="maximum receive amount (sats), default: 10000000")
-parser.add_argument("--initial_funding", default=1000000000, type=float, help="initial wallet funding amount (sats), default:1000000000")
-parser.add_argument("--min_funding",dest="min_funding",type=int,default=100000000,help="receive initial_funding when a payment would take our balance below this amount (sats) (default: 100000000).")
 parser.add_argument("--average_tx_size", default=200, type=int, help="estimaged average tx size in vBytes, default: 200 vB")
 
 args = parser.parse_args()
@@ -71,13 +69,7 @@ with open(args.filename, "w") as fout:
             feerate = read_feerate(ffees)
             if (feerate == False):
                 break
-            amount = get_amount(utxotargets, max_utxos, args.receive_chance, args.receive_min, args.receive_max)
-            print(funding_balance)
-            if (amount < 0 and funding_balance <= args.min_funding):
-                funding_amount = to_coin(Decimal(args.initial_funding)/max_utxos)
-                for i in range(max_utxos):
-                    write_line(fout, funding_amount, 1.0)
-                    funding_balance += funding_amount             
+            amount = get_amount(utxotargets, max_utxos, args.receive_chance, args.receive_min, args.receive_max)             
             write_line(fout, amount, feerate)
             #  deduct amount sent, or credit amount received
             funding_balance += to_sat(amount)
