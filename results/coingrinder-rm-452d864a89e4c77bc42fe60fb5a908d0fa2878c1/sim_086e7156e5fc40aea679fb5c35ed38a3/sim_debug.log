@@ -1,0 +1,5 @@
+2024-02-09T18:13:30.158000Z TestFramework (INFO): Mining blocks for node0 to be able to send enough coins
+2024-02-09T18:13:32.753000Z TestFramework (INFO): Simulating using scenario: bustabit-2019-2020-tiny-utxotargets
+2024-02-09T18:13:32.755000Z TestFramework (INFO): 0 operations performed so far
+2024-02-09T18:13:32.757000Z TestFramework (DEBUG): | bustabit-2019-2020-tiny-utxotargets | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | Total: **0** | 0 | 0 | 0 | 0 | 0 | 0 | 0E-66 | 0E-66 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |  |
+2024-02-09T18:14:45.700000Z TestFramework (WARNING): Failure on op 0 with funder sending 0.5 with error 'send' RPC took longer than 30.000000 seconds. Consider using larger timeout for calls that take longer to return. (-344)

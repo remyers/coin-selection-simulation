@@ -187,9 +187,13 @@ class CoinSelectionSimulation(Simulation):
             usage_str += f"{algo}: **{c}** ; "
         usage_str = usage_str[:-3]
 
+        unlocked_balance = 0
+        for utxo in remaining_utxos:
+            unlocked_balance += utxo['amount']
+
         result = [
             self.scenario_name,
-            str(self.tester.getbalance()),
+            str(unlocked_balance),
             str(mean_utxo_set_size),
             str(len(remaining_utxos)),
             str(self.count_received),
@@ -424,9 +428,13 @@ class CoinSelectionSimulation(Simulation):
                     self.log.info(f"{self.ops} operations performed so far")
                     self.log_sim_results(res, sum_csvw)
 
-                # add funding payments to reach minimum utxos threshold
+                # add funding when balance falls below half the initial funding
                 before_utxos = self.tester.listunspent()
-                if (len(before_utxos) < self.options.min_utxos):
+                unlocked_balance = 0
+                for utxo in before_utxos:
+                    unlocked_balance += utxo['amount']
+                refill_funding = unlocked_balance < self.options.payment_amount/2
+                if (refill_funding):
                     try:
                         # deposit
                         self.funder.send(
@@ -495,14 +503,14 @@ class CoinSelectionSimulation(Simulation):
                         # Send the tx
                         psbt = self.tester.finalizepsbt(psbt, False)["psbt"]
                         tx = self.tester.finalizepsbt(psbt)["hex"]
-                        # delay confirmation of tx
-                        if (self.options.delay_confirmation > 0):
+                        # delay confirmation of tx unless refilling with a funding tx
+                        if (self.options.delay_confirmation == 0 or refill_funding):
+                            self.tester.sendrawtransaction(tx)
+                        else:
                             self.pending_txs.append(tx)
                             if (len(self.pending_txs) > self.options.delay_confirmation):
                                 confirmed_tx = self.pending_txs.pop(0)
                                 self.tester.sendrawtransaction(confirmed_tx)
-                        else:
-                            self.tester.sendrawtransaction(tx)
                         # Get data from the tracepoints
                         algo = None
                         change_pos = None

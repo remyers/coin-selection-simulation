@@ -1,0 +1,4 @@
+----BEGIN SIMULATION RESULTS----
+Scenario: bustabit-2019-2020-tiny-utxotargets
+| Scenario File | Current Balance | Mean #UTXO | Current #UTXO | #Deposits | #Inputs Spent | #Withdraws | #Uneconomical outputs spent | #Change Created | #Changeless | Min Change Value | Max Change Value | Mean Change Value | Std. Dev. of Change Value | Total Fees | Mean Fees per Withdraw | Cost to Empty (10 sat/vB) | Total Cost | Min Input Size | Max Input Size | Mean Input Size | Std. Dev. of Input Size | Max Output Size | Mean Output Size | Std. Dev. of Output Size | Usage |
+| bustabit-2019-2020-tiny-utxotargets | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | Total: **0** | 0 | 0 | 0 | 0 | 0 | 0 | 0E-66 | 0E-66 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |  |

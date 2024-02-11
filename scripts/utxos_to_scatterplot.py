@@ -48,15 +48,7 @@ with open(args.utxos) as utxo_file:
 
         if ((((time+1) % args.group) == 0)):
             for point in bin_counts:
-                # Column 1: Enter a label. The label shows up inside the bubble.
-                # Column 2: Enter values for the X axis.
-                # Column 3: Enter values for the Y axis. Each column of Y-values will show as a series of points on the chart.
-                # Column 4: Enter the name of the data series. Each data series is a different color. The name shows up in the legend.
-                # Column 5: Enter a number for the size of the bubble.
                 for bin in bin_counts:
-                    #row = ","+str(time)+","
-                    #row += str(bin) + ",,"+str(bin_counts[bin])+"\n"
-                    #new_f.write(row)
                     xvals.append(time)
                     yvals.append(bin*args.bin_size)
                     zvals.append(bin_counts[bin]/args.group)

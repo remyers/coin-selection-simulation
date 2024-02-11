@@ -1,0 +1,1 @@
+id,amount,fees,target_feerate,real_feerate,algo,num_inputs,negative_ev,num_outputs,change_amount,before_num_utxos,after_num_utxos,waste
