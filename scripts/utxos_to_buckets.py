@@ -20,6 +20,7 @@ def amount_to_bucket(amount, utxotargets):
             return index+1
         else:
             index+=2
+    return index
 
 parser = argparse.ArgumentParser("Split a given utxos.csv file into a scatter plot binned into target buckets")
 parser.add_argument("utxos", help="CSV file to import utxo sets from")
@@ -73,9 +74,9 @@ with open(args.utxos) as utxo_file:
         for bin in range(max_bin):
             if (bin in bin_counts): 
                 if bin % 2 == 1:
-                    out += ", " + str(float(bin_counts[bin]))
+                    out += ", " + str(bin_counts[bin])
                 else:
-                    out += ", " + str(float(bin_counts[bin]))
+                    out += ", " + str(bin_counts[bin])
             else:
                 out += ", 0"
         new_f.write(out+"\n")                    
