@@ -20,5 +20,6 @@
             "end_satoshis": 1400000,
             "target_utxo_count": 5
         }
-    ]
+    ],
+    "bucket_refill_feerate": 30000
 }

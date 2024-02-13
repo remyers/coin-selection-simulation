@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
-import argparse
 import csv
 import git
+import json
 import logging
 import os
 import struct
@@ -11,10 +11,25 @@ from authproxy import JSONRPCException
 from bcc import BPF, USDT
 from bisect import bisect
 from collections import defaultdict
-from decimal import Decimal, getcontext
+from decimal import Decimal, getcontext, ROUND_DOWN
 from framework import Simulation
-from random import random
+from random import random, randrange
 from statistics import mean, stdev
+
+from random import randrange
+
+COIN = 100000000
+SATOSHI = Decimal(0.00000001)
+KILO = 1000
+
+def satoshi_round(amount):
+    return Decimal(amount).quantize(Decimal('0.00000001'), rounding=ROUND_DOWN)
+
+def to_sat(amount):
+    return int(amount * COIN)
+
+def to_coin(amount):
+    return satoshi_round(amount / COIN)
 
 program = """
 #include <uapi/linux/ptrace.h>
@@ -105,6 +120,53 @@ def ser_compact_size(l):
         r = struct.pack("<BQ", 255, l)
     return r
 
+def compute_target_funding(utxo_targets):
+    target_funding = 0
+    for bucket in utxo_targets:
+        target_funding += bucket['end_satoshis']
+    return target_funding
+
+def target_from_amount(amount, utxo_targets): 
+    for bucket in range(len(utxo_targets)):
+        if amount >= utxo_targets[bucket]['start_satoshis'] and amount <= utxo_targets[bucket]['end_satoshis']:
+            return bucket
+    return -1
+        
+def next_change_target(utxo_targets, target_counts, change_fee):
+    min_bucket = 0
+    min_capacity = None
+    for i in range(len(utxo_targets)):
+        capacity = float(target_counts[i]) / utxo_targets[i]['target_utxo_count']
+        if min_capacity is None or capacity < min_capacity:
+            min_bucket = i
+            min_capacity = capacity
+    amount = randrange(utxo_targets[min_bucket]['start_satoshis'], utxo_targets[min_bucket]['end_satoshis'] - change_fee)
+    return min_bucket, min_capacity, amount
+    
+# split change output to replentish utxo_targets
+def split_to_change_targets(change_amount, change_target, utxo_targets, target_counts, change_fee):
+    # compute initial change target
+    change_outputs = [change_target]
+    change_amount -= change_target
+    bucket = target_from_amount(change_target, utxo_targets)
+    target_counts[bucket] += 1
+
+    while (True):
+        # compute next target amount
+        bucket, _, target_amount = next_change_target(utxo_targets, target_counts, change_fee)
+        if (target_counts[bucket] >= utxo_targets[bucket]['target_utxo_count']):
+            break
+        if (change_amount < change_fee + target_amount):
+            break
+        change_amount -= change_fee + target_amount
+        target_counts[bucket] += 1
+        # add initial change output
+        change_outputs.append(target_amount)
+
+    # remaining change goes into the last change output 
+    change_outputs[-1] += change_amount
+
+    return change_outputs
 
 class CoinSelectionSimulation(Simulation):
     def set_sim_params(self):
@@ -225,6 +287,20 @@ class CoinSelectionSimulation(Simulation):
         self.log.debug(result_str)
         csvw.writerow(result)
         return result_str
+    
+    def compute_target_counts(self, before_utxos, utxo_targets):
+        target_counts = [0]*len(utxo_targets)
+        for utxo in before_utxos:
+            bucket = target_from_amount(to_sat(utxo['amount']), utxo_targets)
+            if bucket > -1:
+                target_counts[bucket] += 1
+        for tx in self.pending_txs:
+            dec_tx = self.tester.decoderawtransaction(tx)
+            for utxo in dec_tx['vout']:
+                bucket = target_from_amount(to_sat(utxo['value']), utxo_targets)
+                if bucket > -1:
+                    target_counts[bucket] += 1
+        return target_counts
 
     def run(self):
         # Get Git commit
@@ -317,6 +393,18 @@ class CoinSelectionSimulation(Simulation):
             scenario_data = zip(scenario_files[0], cycle(scenario_files[1]))
 
         self.scenario_path = self.options.scenario
+
+        utxo_targets = {}
+        bucket_refill_feerate = 0
+        utxo_targets_funding = 0
+        if self.options.utxo_targets:
+            ftargets = open(self.options.utxo_targets)
+            decoder = json.JSONDecoder()
+            text = ftargets.read()
+            json_dec = decoder.decode(text)
+            utxo_targets = json_dec['buckets']
+            bucket_refill_feerate = json_dec['bucket_refill_feerate']
+            utxo_targets_funding = compute_target_funding(utxo_targets)
 
         fields = [
             "Scenario File",
@@ -422,40 +510,57 @@ class CoinSelectionSimulation(Simulation):
             )
             res.flush()
             for val_str, fee_str in scenario_data:
+
+                value = Decimal(val_str.strip())
+                feerate = Decimal(fee_str.strip())
+                change_fee = to_sat(feerate * (Decimal(43) / Decimal(1000.0))) # taproot output cost
+
                 if self.options.ops and self.ops > self.options.ops:
                     break
                 if self.ops % 500 == 0:
                     self.log.info(f"{self.ops} operations performed so far")
                     self.log_sim_results(res, sum_csvw)
 
-                # add funding when balance falls below half the initial funding
+                # compute current state of target utxo buckets
                 before_utxos = self.tester.listunspent()
-                unlocked_balance = 0
+                target_counts = self.compute_target_counts(before_utxos, utxo_targets)
+
+                # add funding when balance falls below half the initial funding
+                max_utxo = None
                 for utxo in before_utxos:
-                    unlocked_balance += utxo['amount']
-                refill_funding = unlocked_balance < self.options.payment_amount/2
+                    if max_utxo is None or utxo['amount'] > max_utxo['amount']:
+                        max_utxo = utxo
+                # unlocked_balance = 0
+                # for utxo in before_utxos:
+                #    unlocked_balance += utxo['amount']
+                # refill_funding = unlocked_balance < to_coin(utxo_targets_funding)/3
+                refill_funding = True
+                if max_utxo is not None:
+                    bucket = target_from_amount(to_sat(max_utxo['amount']), utxo_targets)
+                    if bucket == -1:
+                        refill_funding = False
+                    else:
+                        refill_funding = True
                 if (refill_funding):
                     try:
+                        _, _, change_target = next_change_target(utxo_targets, target_counts, change_fee)
+                        outputs = split_to_change_targets(to_sat(self.options.payment_amount), change_target, utxo_targets, target_counts, change_fee)
+                        change_amounts = {self.tester.getnewaddress(address_type='bech32m'): to_coin(change_out) for change_out in outputs}
                         # deposit
-                        self.funder.send(
-                            outputs=[{self.tester.getnewaddress(): self.options.payment_amount}], 
-                            options={"change_address": withdraw_address}
-                        )
+                        self.funder.sendmany(amounts = change_amounts)
                         self.log.debug(
-                            f"Op {self.ops} UTXOs below minimum, added deposit of {self.options.payment_amount} BTC"
+                            f"Op {self.ops} UTXOs below minimum, added deposit of {self.options.payment_amount} BTC with {len(outputs)} outputs"
                         )
                         self.funder.generatetoaddress(1, gen_addr)
+                        before_utxos = self.tester.listunspent()
+                        target_counts = self.compute_target_counts(before_utxos, utxo_targets)
                     except JSONRPCException as e:
                         self.log.warning(
                             f"Failure on op {self.ops} with funder sending {self.options.payment_amount} with error {str(e)}"
                         )
                 
                 # Make deposit or withdrawal
-                value = Decimal(val_str.strip())
-                feerate = Decimal(fee_str.strip())
-                lock_vouts = []
                 if self.options.weights:
-
                     # choose a random address type based on the weights provided by the user
                     i = bisect(self.options.weights, random() * 100)
                     withdraw_address = withdraw_addresses[self.output_types[i]]
@@ -495,14 +600,54 @@ class CoinSelectionSimulation(Simulation):
                         payment_stats["target_feerate"] = feerate
                         # use the bech32 withdraw address by default
                         # if weights are provided, then choose an address type based on the provided distribution
+                        min_bucket, min_capacity, change_target = next_change_target(utxo_targets, target_counts, change_fee)
+                        spend_outputs=[{withdraw_address: value}]
+                        funding_options= {
+                            "feeRate": feerate,
+                            "lockUnspents": True,
+                            "changePosition": 1,
+                            "change_target": to_coin(change_target)
+                        }
+                        # refill buckets if fee rate is low or a bucket is almost empty
+                        refill = feerate < to_coin(bucket_refill_feerate)
+                        spend_inputs = []
+                        if max_utxo is not None and ((min_capacity < 0.3) or (min_capacity < 0.7 and refill)):
+                            if (min_capacity < 0.3):
+                                self.log.debug(
+                                    f"Op {self.ops} Pre-emptively add input to refill targets from UTXO of amount {max_utxo['amount']} (capacity < 30%)."
+                                )
+                            else:
+                                self.log.debug(
+                                    f"Op {self.ops} Pre-emptively add input to refill targets with UTXO of amount {max_utxo['amount']} (capacity < 70% and feerate {feerate} < bucket_refill_feerate {to_coin(bucket_refill_feerate)}."
+                                )
+
+                            spend_inputs = [{
+                                "txid": max_utxo['txid'],
+                                "vout": max_utxo['vout']
+                            }]
+                            funding_options["add_inputs"]=True
                         psbt = self.tester.walletcreatefundedpsbt(
-                            outputs=[{withdraw_address: value}],
-                            options={"feeRate": feerate, "lockUnspents": True},
+                            inputs = spend_inputs,
+                            outputs= spend_outputs,
+                            options= funding_options
                         )["psbt"]
-                        psbt = self.tester.walletprocesspsbt(psbt)["psbt"]
-                        # Send the tx
-                        psbt = self.tester.finalizepsbt(psbt, False)["psbt"]
-                        tx = self.tester.finalizepsbt(psbt)["hex"]
+
+                        dec = self.tester.decodepsbt(psbt)
+                        change_outputs = []
+                        if len(dec['tx']['vout']) > 1:
+                            change_amount = to_sat(dec['tx']['vout'][1]['value'])
+                            change_outputs = split_to_change_targets(change_amount, change_target, utxo_targets, target_counts, change_fee)
+                            self.log.debug(
+                                    f"Op {self.ops} Opportunistically refill targets: {change_outputs}."
+                                )
+                        input = []
+                        for tx_in in dec['tx']['vin']:
+                            input.append({"txid": tx_in['txid'], 'vout': tx_in['vout']})
+                        for change_out in change_outputs:
+                            spend_outputs += [{self.tester.getnewaddress(address_type='bech32m'): to_coin(change_out)}]
+                        rawtx = self.tester.createrawtransaction(input, spend_outputs)
+                        tx = self.tester.signrawtransactionwithwallet(rawtx)["hex"]
+                        
                         # delay confirmation of tx unless refilling with a funding tx
                         if (self.options.delay_confirmation == 0 or refill_funding):
                             self.tester.sendrawtransaction(tx)
@@ -510,7 +655,9 @@ class CoinSelectionSimulation(Simulation):
                             self.pending_txs.append(tx)
                             if (len(self.pending_txs) > self.options.delay_confirmation):
                                 confirmed_tx = self.pending_txs.pop(0)
+                                dec_tx = self.tester.decoderawtransaction(confirmed_tx)
                                 self.tester.sendrawtransaction(confirmed_tx)
+                                    
                         # Get data from the tracepoints
                         algo = None
                         change_pos = None
@@ -580,6 +727,7 @@ class CoinSelectionSimulation(Simulation):
                             if ev <= 0:
                                 self.unec_utxos += 1
                                 payment_stats["negative_ev"] += 1
+
                         inputs_dw.writerow(
                             {"id": self.withdraws, "input_amounts": input_amounts}
                         )
