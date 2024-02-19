@@ -288,19 +288,24 @@ class CoinSelectionSimulation(Simulation):
         csvw.writerow(result)
         return result_str
     
-    def compute_target_counts(self, before_utxos, utxo_targets):
+    def compute_target_counts(self, utxo_targets):
+        all_unspent_utxos = self.tester.listunspent(0)
         target_counts = [0]*len(utxo_targets)
-        for utxo in before_utxos:
+        for utxo in all_unspent_utxos:
             bucket = target_from_amount(to_sat(utxo['amount']), utxo_targets)
             if bucket > -1:
                 target_counts[bucket] += 1
-        for tx in self.pending_txs:
-            dec_tx = self.tester.decoderawtransaction(tx)
-            for utxo in dec_tx['vout']:
-                bucket = target_from_amount(to_sat(utxo['value']), utxo_targets)
-                if bucket > -1:
-                    target_counts[bucket] += 1
         return target_counts
+    
+    def log_mempool_txs(self, txids):
+        for txid in txids:
+            try:
+                results = self.funder.getmempoolentry(txid)
+                self.log.warning(
+                    f"txid: {txid}, depends: {results['depends']}, spentby: {results['spentby']}"
+                )
+            except JSONRPCException as e:
+                self.log.warning(f"txid not found in mempool: {txid}")
 
     def run(self):
         # Get Git commit
@@ -511,6 +516,7 @@ class CoinSelectionSimulation(Simulation):
             res.flush()
             for val_str, fee_str in scenario_data:
 
+                confirm_transactions = []
                 value = Decimal(val_str.strip())
                 feerate = Decimal(fee_str.strip())
                 change_fee = to_sat(feerate * (Decimal(43) / Decimal(1000.0))) # taproot output cost
@@ -523,39 +529,49 @@ class CoinSelectionSimulation(Simulation):
 
                 # compute current state of target utxo buckets
                 before_utxos = self.tester.listunspent()
-                target_counts = self.compute_target_counts(before_utxos, utxo_targets)
+                target_counts = self.compute_target_counts(utxo_targets)
 
-                # add funding when our largest utxo is from a bucket
+                # add funding when our largest confirmed utxo is from a bucket
                 max_utxo = None
                 for utxo in before_utxos:
                     if max_utxo is None or utxo['amount'] > max_utxo['amount']:
                         max_utxo = utxo
 
-                refill_funding = len(utxo_targets) > 0
-                if max_utxo is not None:
+                if max_utxo is None:
+                    refill_funding = True
+                else:
                     if len(utxo_targets) > 0:
                         # add more funding when our largest utxo is in one of our target buckets
                         bucket = target_from_amount(to_sat(max_utxo['amount']), utxo_targets)
-                        if bucket == -1:
-                            refill_funding = False
-                        else:
-                            refill_funding = True
-                    # add more funding when our largest utxo is less than 1% of the payment amount 
-                    refill_funding = refill_funding or max_utxo['amount'] < self.options.payment_amount * 0.01
+                        refill_funding = bucket != -1
+                    else:
+                        refill_funding = max_utxo['amount'] < 0.001
 
                 if refill_funding:
                     try:
-                        _, _, change_target = next_change_target(utxo_targets, target_counts, 0)
-                        outputs = split_to_change_targets(to_sat(self.options.payment_amount), change_target, utxo_targets, target_counts, change_fee)
-                        change_amounts = {self.tester.getnewaddress(address_type='bech32m'): to_coin(change_out) for change_out in outputs}
-                        # add funding and split it
-                        self.funder.sendmany(amounts = change_amounts, subtractfeefrom = list(change_amounts))
-                        self.log.debug(
-                            f"Op {self.ops} UTXOs below minimum, added deposit of {self.options.payment_amount} BTC with {len(outputs)} outputs"
-                        )
-                        self.funder.generatetoaddress(1, gen_addr)
-                        before_utxos = self.tester.listunspent()
-                        target_counts = self.compute_target_counts(before_utxos, utxo_targets)
+                        if len(utxo_targets) > 0:
+                            # add funding and split it based on targets
+                            _, _, change_target = next_change_target(utxo_targets, target_counts, 0)
+                            outputs = split_to_change_targets(to_sat(self.options.payment_amount), change_target, utxo_targets, target_counts, change_fee)
+                            change_amounts = {self.tester.getnewaddress(address_type='bech32m'): to_coin(change_out) for change_out in outputs}
+                            txid = self.funder.send(outputs=change_amounts, options={"subtract_fee_from_outputs":[*range(0,len(outputs))]})['txid']
+                            self.log.debug(
+                                f"Op {self.ops} UTXOs below minimum, added deposit of {self.options.payment_amount} BTC with {len(outputs)} outputs"
+                            )
+                            confirm_transactions.append(txid)
+                            before_utxos = self.tester.listunspent()
+                            target_counts = self.compute_target_counts(utxo_targets)
+                        else:
+                            # add funding and split it evenly
+                            value = to_coin(to_sat(self.options.payment_amount)/255)
+                            change_amounts = {self.tester.getnewaddress(address_type='bech32m'): value for _ in range(0,255)}
+                            txid = self.funder.send(outputs=change_amounts, options={"subtract_fee_from_outputs":[*range(0,255)]})['txid']
+                            confirm_transactions.append(txid)
+                            before_utxos = self.tester.listunspent()
+                            self.log.debug(
+                                f"Op {self.ops} UTXOs below minimum, added deposit of {self.options.payment_amount} BTC with 255 outputs"
+                            )
+
                     except JSONRPCException as e:
                         self.log.warning(
                             f"Failure on op {self.ops} with funder sending {self.options.payment_amount} with error {str(e)}"
@@ -566,13 +582,15 @@ class CoinSelectionSimulation(Simulation):
                     # choose a random address type based on the weights provided by the user
                     i = bisect(self.options.weights, random() * 100)
                     withdraw_address = withdraw_addresses[self.output_types[i]]
+
                 if value > 0:
                     try:
                         # deposit
-                        self.funder.send(
+                        txid = self.funder.send(
                             outputs=[{self.tester.getnewaddress(): value}], 
                             options={"change_address": withdraw_address}
-                        )
+                        )['txid']
+                        confirm_transactions.append(txid)
                         self.count_received += 1
                         self.log.debug(
                             f"Op {self.ops} Received {self.count_received}th deposit of {value} BTC"
@@ -607,7 +625,9 @@ class CoinSelectionSimulation(Simulation):
                         funding_options= {
                             "feeRate": feerate,
                             "lockUnspents": True,
-                            "changePosition": 1
+                            "changePosition": 1,
+                            "add_inputs": True,
+                            "minconf": 1
                         }
                         if targets_python:
                             _, min_capacity, change_target = next_change_target(utxo_targets, target_counts, change_fee)
@@ -629,7 +649,7 @@ class CoinSelectionSimulation(Simulation):
                                     "txid": max_utxo['txid'],
                                     "vout": max_utxo['vout']
                                 }]
-                                funding_options["add_inputs"]=True
+                        
                         psbt = self.tester.walletcreatefundedpsbt(
                             inputs = spend_inputs,
                             outputs= spend_outputs,
@@ -640,9 +660,6 @@ class CoinSelectionSimulation(Simulation):
                         if len(dec['tx']['vout']) > 1 and targets_python:
                             change_amount = to_sat(dec['tx']['vout'][1]['value'])
                             change_outputs = split_to_change_targets(change_amount, change_target, utxo_targets, target_counts, change_fee)
-                            self.log.debug(
-                                    f"Op {self.ops} Opportunistically refill targets: {change_outputs}."
-                                )
                             # transaction modified to add change outputs
                             input = []
                             for tx_in in dec['tx']['vin']:
@@ -658,15 +675,47 @@ class CoinSelectionSimulation(Simulation):
                             psbt = self.tester.finalizepsbt(psbt, False)["psbt"]
                             tx = self.tester.finalizepsbt(psbt)["hex"]
                         
+                        # decode txid to get txid and vbytes size
+                        dec_tx = self.tester.decoderawtransaction(tx)
+
+                        if len(dec_tx['vout']) > 1:
+                            self.log.debug(
+                                f"Op {self.ops} Opportunistically refill targets with {len(dec_tx['vout']) - 1} change outputs."
+                            )
+
+                        # add transaction to the mempool
+                        self.tester.sendrawtransaction(tx)
+
                         # delay confirmation of tx unless refilling with a funding tx
                         if (self.options.delay_confirmation == 0 or refill_funding):
-                            self.tester.sendrawtransaction(tx)
+                            confirm_transactions.append(dec_tx['txid'])
                         else:
-                            self.pending_txs.append(tx)
+                            self.pending_txs.append(dec_tx)
                             if (len(self.pending_txs) > self.options.delay_confirmation):
-                                confirmed_tx = self.pending_txs.pop(0)
-                                dec_tx = self.tester.decoderawtransaction(confirmed_tx)
-                                self.tester.sendrawtransaction(confirmed_tx)
+                                pending_tx = self.pending_txs.pop(0)
+                                confirm_transactions.append(pending_tx['txid'])
+
+                        mempool = self.tester.getrawmempool(verbose=True)
+                        if dec_tx['txid'] not in mempool:
+                            self.log.warning(
+                                f"Failure on op {self.ops} txid {dec_tx['txid']} submitted but not added to mempool."
+                            )
+                        for x in confirm_transactions:
+                            if x not in mempool:
+                                self.log.warning(
+                                    f"Failure on op {self.ops} txid {x} confirmed but not found in mempool."
+                                )
+                                confirm_transactions = []
+                                break
+
+                        pending_txs1 = []
+                        for x in self.pending_txs:
+                            pending_txs1.append(x['txid'])
+                        for x in confirm_transactions:
+                            pending_txs1.append(x)
+                        for x in mempool:
+                            if x not in pending_txs1:
+                                print(x)
                                     
                         # Get data from the tracepoints
                         algo = None
@@ -746,7 +795,6 @@ class CoinSelectionSimulation(Simulation):
                         self.total_fees += fee
                         payment_stats["fees"] = fee
                         # Get real feerate
-                        dec_tx = self.tester.decoderawtransaction(tx)
                         payment_stats["real_feerate"] = fee / dec_tx["vsize"] * 1000
                         # Spent utxo counts and input info
                         num_in = len(dec["inputs"])
@@ -787,8 +835,15 @@ class CoinSelectionSimulation(Simulation):
                         self.log.warning(
                             f"Failure on op {self.ops} with tester sending {value} with error {str(e)}"
                         )
+
                 self.utxo_set_sizes.append(len(self.tester.listunspent(0)))
-                self.funder.generatetoaddress(1, gen_addr)
+                try:
+                    self.funder.generateblock(output=gen_addr, transactions=confirm_transactions)
+                except JSONRPCException as e:
+                    self.log.warning(
+                        f"Failure on op {self.ops} with funder calling generateblock and confirming transactions: {confirm_transactions} with error {str(e)}"
+                    )
+                    
                 self.ops += 1
 
             for f in scenario_files:
