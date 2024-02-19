@@ -193,8 +193,8 @@ class Simulation:
             "--payment_amount",
             dest="payment_amount",
             type=float,
-            default=0.05,
-            help="Receive a payment of this amount of BTC when the number of utxos is below min_utxos (default: 0.05)."
+            default=0.5,
+            help="Receive a payment of this amount of BTC when the number of utxos is below min_utxos or < 1% (default: 0.5)."
         )
         parser.add_argument(
             "--utxo_targets",

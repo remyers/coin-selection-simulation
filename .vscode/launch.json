@@ -24,7 +24,26 @@
             "args":[
                 "--delay_confirmation","50",
                 "--extra_configs","consolidatefeerate=0",
-                "--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim",
+                "--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim_targets",
+                "--scenario","scenarios/bustabit-2019-2020-tiny-utxotargets.csv",
+                "--payment_amount","0.5",
+                "--utxo_targets","utxotargets.json",
+                "/home/remyers/github/bitcoin-core/test/config.ini",
+                "results/"],
+            "sudo": true
+        },
+        {
+            "name": "core-targets-cg-rm-bbtiny",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "/home/remyers/github/coin-selection-simulation",
+            "program": "scripts/simulation.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args":[
+                "--delay_confirmation","50",
+                "--extra_configs","consolidatefeerate=0,utxotargetsfile=/home/remyers/github/coin-selection-simulation/utxotargets.json",
+                "--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim1_core_targets",
                 "--scenario","scenarios/bustabit-2019-2020-tiny-utxotargets.csv",
                 "--payment_amount","0.5",
                 "--utxo_targets","utxotargets.json",
@@ -41,23 +60,13 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "args":[
-                "--delay_confirmation","100",
+                "--delay_confirmation","50",
                 "--extra_configs","consolidatefeerate=0",
-                "--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim1",
+                "--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim_no_targets",
                 "--scenario","scenarios/bustabit-2019-2020-tiny-utxotargets.csv",
+                "--payment_amount","0.5",
                 "/home/remyers/github/bitcoin-core/test/config.ini",
                 "results/"],
-            "sudo": true
-        },
-        {
-            "name": "master-bbtiny",
-            "type": "debugpy",
-            "request": "launch",
-            "cwd": "/home/remyers/github/coin-selection-simulation",
-            "program": "scripts/simulation.py",
-            "console": "integratedTerminal",
-            "justMyCode": true,
-            "args":["--delay_confirmation","100","--tmpdir","/mnt/tmp/bitcoin_coin_sel_sim","--scenario","scenarios/bustabit-2019-2020-tiny.csv","/home/remyers/github/bitcoin/test/config.ini","results/"],
             "sudo": true
         },
         {
