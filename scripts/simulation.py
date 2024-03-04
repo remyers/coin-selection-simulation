@@ -458,6 +458,7 @@ class CoinSelectionSimulation(Simulation):
         bpf = BPF(text=program, usdt_contexts=[bitcoind_with_usdts])
 
         self.log.info(f"Simulating using scenario: {self.scenario_name}")
+        self.log.info(f"Options: {self.options}")
         self.total_fees = Decimal()
         self.ops = 0
         self.count_sent = 0
