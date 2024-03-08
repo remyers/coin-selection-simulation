@@ -11,7 +11,7 @@ from authproxy import JSONRPCException
 from bcc import BPF, USDT
 from bisect import bisect
 from collections import defaultdict
-from decimal import Decimal, getcontext, ROUND_DOWN
+from decimal import Decimal, getcontext, ROUND_DOWN, ROUND_UP
 from framework import Simulation
 from random import random, randrange
 from statistics import mean, stdev
@@ -19,7 +19,6 @@ from statistics import mean, stdev
 from random import randrange
 
 COIN = 100000000
-SATOSHI = Decimal(0.00000001)
 KILO = 1000
 
 def satoshi_round(amount):
@@ -520,7 +519,8 @@ class CoinSelectionSimulation(Simulation):
                 confirm_transactions = []
                 value = Decimal(val_str.strip())
                 feerate = Decimal(fee_str.strip())
-                change_fee = to_sat(feerate * (Decimal(43) / Decimal(1000.0))) # taproot output cost
+                # cost to add a taproot output
+                change_fee = int(Decimal(COIN * feerate * Decimal(43) / Decimal(1000.0)).quantize(1, ROUND_UP))
 
                 if self.options.ops and self.ops > self.options.ops:
                     break
@@ -630,6 +630,8 @@ class CoinSelectionSimulation(Simulation):
                             "add_inputs": True,
                             "minconf": 1
                         }
+                        if self.options.disable_algos == True:
+                            funding_options["disable_algos"] = ["knapsack","srd"]
                         if targets_python:
                             _, min_capacity, change_target = next_change_target(utxo_targets, target_counts, change_fee)
                             if min_capacity < 1.0 and targets_python:
@@ -667,14 +669,14 @@ class CoinSelectionSimulation(Simulation):
                                 input.append({"txid": tx_in['txid'], 'vout': tx_in['vout']})
                             for change_out in change_outputs:
                                 spend_outputs += [{self.tester.getnewaddress(address_type='bech32m'): to_coin(change_out)}]
-                            rawtx = self.tester.createrawtransaction(input, spend_outputs)
-                            tx = self.tester.signrawtransactionwithwallet(rawtx)['hex']
-                        else:
-                            # transaction computed by bitcoind
-                            psbt = self.tester.walletprocesspsbt(psbt)["psbt"]
-                            # Send the tx
-                            psbt = self.tester.finalizepsbt(psbt, False)["psbt"]
-                            tx = self.tester.finalizepsbt(psbt)["hex"]
+                            # create updated psbt with new outputs
+                            psbt = self.tester.createpsbt(input, spend_outputs)
+
+                        psbt = self.tester.walletprocesspsbt(psbt)["psbt"]
+                        # Send the tx
+                        psbt = self.tester.finalizepsbt(psbt, False)["psbt"]
+                        tx = self.tester.finalizepsbt(psbt)["hex"]
+                        dec = self.tester.decodepsbt(psbt)
                         
                         # decode txid to get txid and vbytes size
                         dec_tx = self.tester.decoderawtransaction(tx)
@@ -756,7 +758,6 @@ class CoinSelectionSimulation(Simulation):
                         self.algo_counts[algo] += 1
                         # Get negative EV UTXOs
                         payment_stats["negative_ev"] = 0
-                        dec = self.tester.decodepsbt(psbt)
                         input_amounts = []
                         for in_idx, inp in enumerate(dec["inputs"]):
                             inp_size = (
@@ -792,7 +793,7 @@ class CoinSelectionSimulation(Simulation):
                             {"id": self.withdraws, "input_amounts": input_amounts}
                         )
                         # Get fee info
-                        fee = dec["fee"]
+                        fee = dec['fee']
                         self.total_fees += fee
                         payment_stats["fees"] = fee
                         # Get real feerate
