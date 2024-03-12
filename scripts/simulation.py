@@ -16,8 +16,6 @@ from framework import Simulation
 from random import random, randrange
 from statistics import mean, stdev
 
-from random import randrange
-
 COIN = 100000000
 KILO = 1000
 
