@@ -498,6 +498,8 @@ class CoinSelectionSimulation(Simulation):
                     "before_num_utxos",
                     "after_num_utxos",
                     "waste",
+                    "max_excess",
+                    "excess",
                 ],
             )
             dw.writeheader()
@@ -613,10 +615,18 @@ class CoinSelectionSimulation(Simulation):
                         utxos_dw.writerow(
                             {"id": self.withdraws, "utxo_amounts": utxo_amounts}
                         )
+
                         # Prepare withdraw
                         value = value * -1
+                        max_excess = 0
+                        if self.options.excess_percent:
+                            # target can be to up to 5% larger or smaller if an exact match is found
+                            max_excess = satoshi_round(value * Decimal(self.options.excess_percent))
+
                         payment_stats["amount"] = value
                         payment_stats["target_feerate"] = feerate
+                        payment_stats["max_excess"] = max_excess
+                        payment_stats["excess"] = 0
                         # use the bech32 withdraw address by default
                         # if weights are provided, then choose an address type based on the provided distribution
                         spend_inputs = []
@@ -628,6 +638,8 @@ class CoinSelectionSimulation(Simulation):
                             "add_inputs": True,
                             "minconf": 1
                         }
+                        if max_excess > 0:
+                            funding_options["max_excess"] = max_excess
                         if self.options.disable_algos == True:
                             funding_options["disable_algos"] = ["knapsack","srd"]
                         if targets_python:
@@ -682,6 +694,13 @@ class CoinSelectionSimulation(Simulation):
                         if len(dec_tx['vout']) > 1:
                             self.log.debug(
                                 f"Op {self.ops} Opportunistically refill targets with {len(dec_tx['vout']) - 1} change outputs."
+                            )
+
+                        if dec['tx']['vout'][0]['value'] != value:
+                            assert(len(dec_tx['vout']) == 1)
+                            payment_stats["excess"] = (dec['tx']['vout'][0]['value'] - value)
+                            self.log.debug(
+                                f"Op {self.ops} Added to target excess of {to_sat(dec['tx']['vout'][0]['value'] - value)} sats; max excess = {to_sat(max_excess)} sats"
                             )
 
                         # add transaction to the mempool

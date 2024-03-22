@@ -53,6 +53,7 @@ parser.add_argument("feerates", help="Fee rates csv file (btc), note: uses last 
 parser.add_argument("filename", help="File to output to")
 parser.add_argument("--receive_chance", default=0.01, type=float, help="chance of receiving vs sending a payment per time point, default: 0.01 (ie. 1:100)")
 parser.add_argument("--long_term_rate", default=0.0003, type=float, help="long term average feerate, default: 0.0030000 BTC/kvb")
+parser.add_argument("--upfront_receive", default=5000, type=int, help="number of received utxos before simulating, default: 5000")
 
 args = parser.parse_args()
 
@@ -67,6 +68,9 @@ with open(args.targets, "r") as ftargets:
 
 with open(args.filename, "w") as fout:
     with open(args.feerates, "r") as ffees:
+        for i in range(args.upfront_receive):
+            amount = get_amount(bucket, 1.0, args.long_term_rate)             
+            write_line(fout, amount, 0)
         while(1):
             feerate = read_feerate(ffees)
             if (feerate == False):
