@@ -1,0 +1,8 @@
+Estimated by analyze-scenario.py:
+    total_fees=0.85966529
+
+
+Computed by simulation.py:
+    total_fess=0.85913181
+    2024-03-27T03:14:40.383000Z TestFramework (INFO): | bustabit-2019-2020-tiny-utxotargets | 0 | 0 | 0 | 0 | 14947 | 14947 | 0 | 0 | bnb: **14947** ; Total: **14947** | 0 | 0 | 0 | 0 | 0.85913181 | 0.0000574785448585 | 0E-66 | 0.859131810000 | 1 | 1 | 1 | 0 | 1 | 1 | 0 | bnb: **14947** |
+

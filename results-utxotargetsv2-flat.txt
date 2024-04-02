@@ -1,0 +1,21 @@
+minimum_total_fees=0.85966529
+simulated_total_fees=0.9125474600000007381837452409
+simulated_total_excess=0.05172263
+utxos_count=501
+target_counts=[206, 69, 27, 0]
+total_sent_value=8.945735790000000134795693534
+total_utxo_value=3.223093339999999999981850074
+total_pending_utxo_value=0.78188194
+total_utxo_value+total_sent_value+total_fees+total_pending_utxo_value=13.86325853000000087296128885
+total_funding_value=13.86326620000000073816559531
+received_utxos=17
+received_utxos_value=111326620
+total_changeless=1316
+total_with_change=13666
+utxos_not_in_buckets=246
+utxos_in_buckets=302
+small_change_outputs_not_in_buckets=7
+small_utxos_not_in_buckets=8
+failures: 0
+"feerates_satoshis_per_kvbyte":
+[{"start": 1000, "end": 1999, "probability": 0.05}, {"start": 2000, "end": 4999, "probability": 0.05}, {"start": 5000, "end": 7999, "probability": 0.06}, {"start": 8000, "end": 10999, "probability": 0.06}, {"start": 11000, "end": 13999, "probability": 0.06}, {"start": 14000, "end": 16999, "probability": 0.07}, {"start": 17000, "end": 19999, "probability": 0.06}, {"start": 20000, "end": 25999, "probability": 0.05}, {"start": 26000, "end": 32999, "probability": 0.06}, {"start": 33000, "end": 41999, "probability": 0.06}, {"start": 42000, "end": 52999, "probability": 0.05}, {"start": 53000, "end": 61999, "probability": 0.05}, {"start": 62000, "end": 69999, "probability": 0.05}, {"start": 70000, "end": 79999, "probability": 0.05}, {"start": 80000, "end": 94999, "probability": 0.05}, {"start": 95000, "end": 108999, "probability": 0.05}, {"start": 109000, "end": 124999, "probability": 0.05}, {"start": 125000, "end": 191999, "probability": 0.05}, {"start": 192000, "end": 296999, "probability": 0.02}]
