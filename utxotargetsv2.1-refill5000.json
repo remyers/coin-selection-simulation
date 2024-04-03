@@ -1,0 +1,42 @@
+{
+    "buckets": [
+        {
+            "start_satoshis": 10000,
+            "target_utxo_count": 300
+        },
+        {
+            "start_satoshis": 50000,
+            "target_utxo_count": 100
+        },
+        {
+            "start_satoshis": 200000,
+            "target_utxo_count": 40
+        },
+        {
+            "start_satoshis": 1000000,
+            "target_utxo_count": 10
+        }
+    ],
+    "bucket_refill_feerate": 5000,
+    "feerates_satoshis_per_kvbyte": [
+        {"start": 1000, "end": 1999, "probability": 0.05},
+        {"start": 2000, "end": 4999, "probability": 0.05},
+        {"start": 5000, "end": 7999, "probability": 0.06},
+        {"start": 8000, "end": 10999, "probability": 0.06},
+        {"start": 11000, "end": 13999, "probability": 0.06},
+        {"start": 14000, "end": 16999, "probability": 0.07},
+        {"start": 17000, "end": 19999, "probability": 0.06},
+        {"start": 20000, "end": 25999, "probability": 0.05},
+        {"start": 26000, "end": 32999, "probability": 0.06},
+        {"start": 33000, "end": 41999, "probability": 0.06},
+        {"start": 42000, "end": 52999, "probability": 0.05},
+        {"start": 53000, "end": 61999, "probability": 0.05},
+        {"start": 62000, "end": 69999, "probability": 0.05},
+        {"start": 70000, "end": 79999, "probability": 0.05},
+        {"start": 80000, "end": 94999, "probability": 0.05},
+        {"start": 95000, "end": 108999, "probability": 0.05},
+        {"start": 109000, "end": 124999, "probability": 0.05},
+        {"start": 125000, "end": 191999, "probability": 0.05},
+        {"start": 192000, "end": 296999, "probability": 0.02}
+    ]
+}

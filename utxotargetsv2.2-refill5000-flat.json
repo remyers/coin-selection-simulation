@@ -1,0 +1,24 @@
+{
+    "buckets": [
+        {
+            "start_satoshis": 10000,
+            "target_utxo_count": 600
+        },
+        {
+            "start_satoshis": 50000,
+            "target_utxo_count": 200
+        },
+        {
+            "start_satoshis": 200000,
+            "target_utxo_count": 80
+        },
+        {
+            "start_satoshis": 1000000,
+            "target_utxo_count": 20
+        }
+    ],
+    "bucket_refill_feerate": 5000,
+    "feerates_satoshis_per_kvbyte": [
+        {"start": 1000, "end": 296999, "probability": 1.0}
+    ]
+}

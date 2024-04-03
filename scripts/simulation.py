@@ -123,9 +123,9 @@ def compute_target_funding(utxo_targets):
         target_funding += bucket['end_satoshis']
     return target_funding
 
-def target_from_amount(amount, utxo_targets): 
+def target_from_amount(amount, utxo_targets, min_fee, max_fee): 
     for bucket in range(len(utxo_targets)):
-        if amount >= utxo_targets[bucket]['start_satoshis'] and amount <= utxo_targets[bucket]['end_satoshis']:
+        if amount >= utxo_targets[bucket]['start_satoshis'] + min_fee and amount <= utxo_targets[bucket]['start_satoshis'] + max_fee:
             return bucket
     return -1
         
@@ -141,11 +141,11 @@ def next_change_target(utxo_targets, target_counts, change_fee):
     return min_bucket, min_capacity, amount
     
 # split change output to replentish utxo_targets
-def split_to_change_targets(change_amount, change_target, utxo_targets, target_counts, change_fee):
+def split_to_change_targets(change_amount, change_target, utxo_targets, target_counts, change_fee, min_fee, max_fee):
     # compute initial change target
     change_outputs = [change_target]
-    change_amount -= change_target
-    bucket = target_from_amount(change_target, utxo_targets)
+    change_amount -= change_fee + change_target
+    bucket = target_from_amount(change_target, utxo_targets, min_fee, max_fee)
     target_counts[bucket] += 1
 
     while (True):
@@ -285,11 +285,11 @@ class CoinSelectionSimulation(Simulation):
         csvw.writerow(result)
         return result_str
     
-    def compute_target_counts(self, utxo_targets):
+    def compute_target_counts(self, utxo_targets, min_fee, max_fee):
         all_unspent_utxos = self.tester.listunspent(0)
         target_counts = [0]*len(utxo_targets)
         for utxo in all_unspent_utxos:
-            bucket = target_from_amount(to_sat(utxo['amount']), utxo_targets)
+            bucket = target_from_amount(to_sat(utxo['amount']), utxo_targets, min_fee, max_fee)
             if bucket > -1:
                 target_counts[bucket] += 1
         return target_counts
@@ -398,6 +398,8 @@ class CoinSelectionSimulation(Simulation):
 
         utxo_targets = {}
         bucket_refill_feerate = 0
+        min_fee = 0
+        max_fee = 0
         if self.options.utxo_targets:
             ftargets = open(self.options.utxo_targets)
             decoder = json.JSONDecoder()
@@ -405,6 +407,9 @@ class CoinSelectionSimulation(Simulation):
             json_dec = decoder.decode(text)
             utxo_targets = json_dec['buckets']
             bucket_refill_feerate = json_dec['bucket_refill_feerate']
+            fee_estimates = json_dec['feerates_satoshis_per_kvbyte']
+            min_fee = fee_estimates[0]['start']
+            max_fee = fee_estimates[-1]['end']
 
         targets_python = "utxotargetsfile" not in self.options.extra_configs and len(utxo_targets) > 0
 
@@ -530,7 +535,7 @@ class CoinSelectionSimulation(Simulation):
 
                 # compute current state of target utxo buckets
                 before_utxos = self.tester.listunspent()
-                target_counts = self.compute_target_counts(utxo_targets)
+                target_counts = self.compute_target_counts(utxo_targets, min_fee, max_fee)
 
                 # add funding when our largest confirmed utxo is from a bucket
                 max_utxo = None
@@ -543,39 +548,26 @@ class CoinSelectionSimulation(Simulation):
                 else:
                     if len(utxo_targets) > 0:
                         # add more funding when our largest utxo is in one of our target buckets
-                        bucket = target_from_amount(to_sat(max_utxo['amount']), utxo_targets)
+                        bucket = target_from_amount(to_sat(max_utxo['amount']), utxo_targets, min_fee, max_fee)
                         refill_funding = bucket != -1
                     else:
                         refill_funding = max_utxo['amount'] < 0.001
 
                 if refill_funding:
                     try:
-                        if len(utxo_targets) > 0:
-                            # add funding and split it based on targets
-                            _, _, change_target = next_change_target(utxo_targets, target_counts, 0)
-                            outputs = split_to_change_targets(to_sat(self.options.payment_amount), change_target, utxo_targets, target_counts, change_fee)
-                            change_amounts = {self.tester.getnewaddress(address_type='bech32m'): to_coin(change_out) for change_out in outputs}
-                            txid = self.funder.send(outputs=change_amounts, options={"subtract_fee_from_outputs":[*range(0,len(outputs))]})['txid']
-                            self.log.debug(
-                                f"Op {self.ops} UTXOs below minimum, added deposit of {self.options.payment_amount} BTC with {len(outputs)} outputs"
-                            )
-                            confirm_transactions.append(txid)
-                            before_utxos = self.tester.listunspent()
-                            target_counts = self.compute_target_counts(utxo_targets)
-                        else:
-                            # add funding and split it evenly
-                            value = to_coin(to_sat(self.options.payment_amount)/255)
-                            change_amounts = {self.tester.getnewaddress(address_type='bech32m'): value for _ in range(0,255)}
-                            txid = self.funder.send(outputs=change_amounts, options={"subtract_fee_from_outputs":[*range(0,255)]})['txid']
-                            confirm_transactions.append(txid)
-                            before_utxos = self.tester.listunspent()
-                            self.log.debug(
-                                f"Op {self.ops} UTXOs below minimum, added deposit of {self.options.payment_amount} BTC with 255 outputs"
-                            )
+                        # add funding and split it evenly
+                        value = to_coin(to_sat(self.options.payment_amount)/255)
+                        change_amounts = {self.tester.getnewaddress(address_type='bech32m'): value for _ in range(0,255)}
+                        txid = self.funder.send(outputs=change_amounts, options={"subtract_fee_from_outputs":[*range(0,255)]})['txid']
+                        confirm_transactions.append(txid)
+                        before_utxos = self.tester.listunspent()
+                        self.log.debug(
+                            f"Op {self.ops} UTXOs below minimum, added deposit of {self.options.payment_amount} BTC with 255 outputs"
+                        )
 
                     except JSONRPCException as e:
                         self.log.warning(
-                            f"Failure on op {self.ops} with funder sending {self.options.payment_amount} with error {str(e)}"
+                            f"Failure on op {self.ops} to add deposit of {self.options.payment_amount} BTC with 255 outputs with error {str(e)}"
                         )
                 
                 # Make deposit or withdrawal
@@ -588,7 +580,7 @@ class CoinSelectionSimulation(Simulation):
                     try:
                         # deposit
                         txid = self.funder.send(
-                            outputs=[{self.tester.getnewaddress(): value}], 
+                            outputs=[{self.tester.getnewaddress(address_type='bech32m'): value}], 
                             options={"change_address": withdraw_address}
                         )['txid']
                         confirm_transactions.append(txid)
@@ -622,6 +614,17 @@ class CoinSelectionSimulation(Simulation):
                         if self.options.excess_percent:
                             # target can be to up to 5% larger or smaller if an exact match is found
                             max_excess = satoshi_round(value * Decimal(self.options.excess_percent))
+
+                        # DEBUG DEBUG DEBUG deposit the withdraw amount before spending to test and compute minimum total fees possible for scenario
+                        if False:
+                            size_vbytes = 111 + 4
+                            value_plus_fee = value + satoshi_round(feerate * Decimal(size_vbytes/1000)) 
+                            txid = self.funder.send(
+                                outputs=[{self.tester.getnewaddress(address_type='bech32m'): value_plus_fee}], 
+                                options={"change_address": withdraw_address}
+                            )['txid']
+                            self.funder.generateblock(output=gen_addr, transactions=[txid])
+                        # DEBUG DEBUG DEBUG
 
                         payment_stats["amount"] = value
                         payment_stats["target_feerate"] = feerate
@@ -672,7 +675,7 @@ class CoinSelectionSimulation(Simulation):
                         dec = self.tester.decodepsbt(psbt)
                         if len(dec['tx']['vout']) > 1 and targets_python:
                             change_amount = to_sat(dec['tx']['vout'][1]['value'])
-                            change_outputs = split_to_change_targets(change_amount, change_target, utxo_targets, target_counts, change_fee)
+                            change_outputs = split_to_change_targets(change_amount, change_target, utxo_targets, target_counts, change_fee, min_fee, max_fee)
                             # transaction modified to add change outputs
                             input = []
                             for tx_in in dec['tx']['vin']:
@@ -691,9 +694,9 @@ class CoinSelectionSimulation(Simulation):
                         # decode txid to get txid and vbytes size
                         dec_tx = self.tester.decoderawtransaction(tx)
 
-                        if len(dec_tx['vout']) > 1:
+                        if len(dec_tx['vout']) > 2:
                             self.log.debug(
-                                f"Op {self.ops} Opportunistically refill targets with {len(dec_tx['vout']) - 1} change outputs."
+                                f"Op {self.ops} Opportunistically refill targets with {len(dec_tx['vout']) - 1} change outputs. Feerate: {to_sat(feerate)} sats/kvbyte."
                             )
 
                         if dec['tx']['vout'][0]['value'] != value:
