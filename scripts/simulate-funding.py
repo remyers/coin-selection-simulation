@@ -124,19 +124,13 @@ def compute_target_counts(utxos, pending_txs, utxo_targets, feerates_satoshis_pe
             target_counts[bucket] += 1
     return target_counts
 
-def spend_from_large_non_bucket(amount_needed, utxos, utxo_targets, min_fee, max_fee):
-    reverse_sorted_utxos = sorted(utxos, reverse=True)
-    for amount in reverse_sorted_utxos:
-        change = amount - amount_needed
-        if to_sat(change) > bucket_max:
-            break
-        if amount < bucket_max:
-            # no large unspent utxo found
-            break
-    
-    spent_bucket = target_from_amount(to_sat(amount), utxo_targets, min_fee, max_fee)
-    assert(spent_bucket == -1)
-    return amount, spent_bucket
+def spend_from_large_non_bucket(amount_needed, sorted_utxos, utxo_targets, min_fee, max_fee):
+    for amount in sorted_utxos:
+        if satoshi_round(amount) > amount_needed:
+            spent_bucket = target_from_amount(to_sat(amount), utxo_targets, min_fee, max_fee)
+            if spent_bucket == -1:
+                return amount
+    return -1
 
 def check_fees(feerate, tx_size_vbytes, total_fees, outputs, change_fee):
     change_fee = (Decimal(feerate) * Decimal(43) / Decimal(1000.0)).quantize(Decimal('0.00000001'), ROUND_UP)
@@ -234,6 +228,7 @@ for _ in range(int(args.repeat)):
         for row in scenarioreader:
             spend = ast.literal_eval(row[0])
             feerate = ast.literal_eval(row[1])
+            refill = feerate < to_coin(results_stats[-1]['bucket_refill_feerate'])
             # 1 input, 1 output
             tx_fee = Decimal(feerate * (tx_size_vbytes/1000)).quantize(Decimal('0.00000001'), rounding=ROUND_UP)
             change_fee = Decimal(feerate * (43/1000.0)).quantize(Decimal('0.00000001'), rounding=ROUND_UP)
@@ -255,6 +250,7 @@ for _ in range(int(args.repeat)):
                 total_funding_value += satoshi_round(spend)
                 received_utxos.append(spend)
             else:
+                changeless = False
                 success = False
                 spend = satoshi_round(spend * -1)
                 sorted_utxos = sorted(utxos)
@@ -262,51 +258,64 @@ for _ in range(int(args.repeat)):
                 target_bucket = target_from_amount(to_sat(amount_needed), utxo_targets, min_fee, max_fee)
                 for amount in sorted_utxos:
                     spent_bucket = target_from_amount(to_sat(amount), utxo_targets, min_fee, max_fee)
-                    if satoshi_round(amount) > amount_needed:
-                        total_fees = satoshi_round(amount) - amount_needed
-                        if total_fees > spend*Decimal(args.excess_percent):
-                            # select largest unused utxo instead
-                            #amount, spent_bucket = spend_from_large_non_bucket(amount_needed, sorted_utxos, utxo_targets, min_fee, max_fee)
-                            amount = sorted_utxos[-1]
+                    if amount >= amount_needed:
+                        excess = amount - amount_needed
+                        # check if nearest utxo can be used without change
+                        if excess > change_fee:
+                            # otherwise pick a non-bucket utxo instead of nearest utxo
+                            if refill:
+                                # use the largest utxo instead
+                                amount = sorted_utxos[-1]
+                            else:
+                                # use the next largest non-bucket utxo instead
+                                amount = spend_from_large_non_bucket(amount_needed, sorted_utxos, utxo_targets, min_fee, max_fee)
                             if amount >= amount_needed:
                                 # found solution with change
                                 change_amount = amount - amount_needed
-                                min_bucket, min_capacity, change_target = next_change_target(utxo_targets, target_counts, feerates_satoshis_per_kvbyte, tx_size_vbytes)
-                                # change_target = to_sat(amount_needed)
-                                if feerate < to_coin(results_stats[-1]['bucket_refill_feerate']) and to_sat(change_amount) > to_sat(change_fee) + change_target:
-                                    # split to replace spent target and refill as many buckets as possible
-                                    outputs_sats = split_to_change_targets(to_sat(change_amount), change_target, utxo_targets, target_counts, feerates_satoshis_per_kvbyte, to_sat(change_fee), -1)
+                                outputs_sats = []
+                                # check that change is larger than change fee + smallest possible target + lowest spend fee
+                                if to_sat(change_amount) > to_sat(change_fee) + utxo_targets[0]['start_satoshis'] + min_fee:
+                                    _, _, change_target = next_change_target(utxo_targets, target_counts, feerates_satoshis_per_kvbyte, tx_size_vbytes)
+                                    if refill and to_sat(change_amount) > to_sat(change_fee) + change_target:
+                                        # split change to refill as many buckets as possible
+                                        outputs_sats = split_to_change_targets(to_sat(change_amount), change_target, utxo_targets, target_counts, feerates_satoshis_per_kvbyte, to_sat(change_fee), -1)
+                                    else:
+                                        # a single change output atleast as big as the smallest possible target + lowest spend fee
+                                        outputs_sats = [to_sat(change_amount - change_fee)]
+                                    outputs = []
+                                    for output_sats in outputs_sats:
+                                        outputs.append(to_coin(output_sats))
+                                        out_bucket = target_from_amount(output_sats, utxo_targets, min_fee, max_fee)
+                                        if out_bucket == -1 and output_sats < bucket_max:
+                                            small_change_outputs_not_in_buckets.append(output_sats)
+                                        
+                                    total_fees = amount - (spend + sum(outputs))
+                                    check_fees(feerate, tx_size_vbytes, total_fees, outputs, change_fee)
+                                    pending_txs.append(outputs)
+                                    total_sent_value += Decimal(spend)
+                                    with_change_txs.append({"target_bucket": target_bucket, "spent_bucket": spent_bucket, "utxo_amount": Decimal(amount), "feerate": feerate, "excess": satoshi_round(Decimal(amount) - amount_needed)})
+                                    success = True
+                                    break
                                 else:
-                                    outputs_sats = [to_sat(change_amount - change_fee)]
-                                #outputs_sats = split_residual_change(outputs_sats, utxo_targets, target_counts, to_sat(change_fee), min_fee, max_fee, bucket_max)
-
-                                outputs = []
-                                for output_sats in outputs_sats:
-                                    outputs.append(to_coin(output_sats))
-                                    out_bucket = target_from_amount(output_sats, utxo_targets, min_fee, max_fee)
-                                    if out_bucket == -1 and output_sats < bucket_max:
-                                        small_change_outputs_not_in_buckets.append(output_sats)
-                                    
-                                total_fees = amount - (spend + sum(outputs))
-                                check_fees(feerate, tx_size_vbytes, total_fees, outputs, change_fee)
-                                pending_txs.append(outputs)
-                                total_sent_value += Decimal(spend)
-                                with_change_txs.append({"target_bucket": target_bucket, "spent_bucket": spent_bucket, "utxo_amount": Decimal(amount), "feerate": feerate, "excess": satoshi_round(Decimal(amount) - amount_needed)})
-                                success = True
-                                break
+                                    # add change to target value if less than change fee + smallest possible target + lowest spend fee
+                                    changeless = True
+                                    break
                             else:
                                 failures.append({"spent_bucket": spent_bucket})
                                 success = False
                                 break
                         else:
-                            # found changeless solution
-                            pending_txs.append([])
-                            total_fees = tx_fee
-                            total_sent_value += Decimal(amount - tx_fee)
-                            assert(spent_bucket == target_bucket or spent_bucket == -1)
-                            changeless_txs.append({"target_bucket": target_bucket, "utxo_amount": Decimal(amount), "feerate": feerate, "excess": satoshi_round(Decimal(amount) - amount_needed)})
-                            success = True
+                            # add excess to target value if less than change fee
+                            changeless = True
                             break
+
+                if changeless:
+                    pending_txs.append([])
+                    total_fees = tx_fee
+                    total_sent_value += Decimal(amount - tx_fee)
+                    changeless_txs.append({"target_bucket": target_bucket, "utxo_amount": Decimal(amount), "feerate": feerate, "excess": satoshi_round(Decimal(amount) - amount_needed)})
+                    success = True
+                
                 if success:
                     sim_total_fees += total_fees
                     utxos.remove(amount)
