@@ -20,11 +20,11 @@ def to_coin(amount):
     return satoshi_round(amount / COIN)
 
 def random_bucket(utxotargets, max_utxos):
-    index = randrange(0, max_utxos)
-    count = 0
+    prob = randrange(0, 1)
+    accum_prob = 0
     for bucket in utxotargets:
-        count += bucket['target_utxo_count']
-        if (index < count):
+        accum_prob += bucket['target_utxo_percent']
+        if (prob < accum_prob):
             return bucket
         
 def get_amount(bucket, receive_chance, long_term_rate):
@@ -53,22 +53,21 @@ parser.add_argument("feerates", help="Fee rates csv file (btc), note: uses last 
 parser.add_argument("filename", help="File to output to")
 parser.add_argument("--receive_chance", default=0.01, type=float, help="chance of receiving vs sending a payment per time point, default: 0.01 (ie. 1:100)")
 parser.add_argument("--long_term_rate", default=0.0003, type=float, help="long term average feerate, default: 0.0030000 BTC/kvb")
-parser.add_argument("--upfront_receive", default=5000, type=int, help="number of received utxos before simulating, default: 5000")
+parser.add_argument("--upfront_receive", default=0, type=int, help="number of received utxos before simulating, default: 5000")
 
 args = parser.parse_args()
 
 with open(args.targets, "r") as ftargets:
     decoder = json.JSONDecoder()
     text = ftargets.read()
-    utxotargets = decoder.decode(text)['buckets']
-    max_utxos = 0
-    receive = random() 
-    for bucket in utxotargets:
-        max_utxos += bucket['target_utxo_count']
+    json_dec = decoder.decode(text)
+    utxotargets = json_dec['buckets']
+    max_utxos = json_dec['bucket_utxos_count']
 
 with open(args.filename, "w") as fout:
     with open(args.feerates, "r") as ffees:
         for i in range(args.upfront_receive):
+            bucket = random_bucket(utxotargets, max_utxos)
             amount = get_amount(bucket, 1.0, args.long_term_rate)             
             write_line(fout, amount, 0)
         while(1):

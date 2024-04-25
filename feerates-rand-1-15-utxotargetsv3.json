@@ -1,0 +1,81 @@
+{
+  "feerates_satoshis_per_kvbyte": [
+    {
+      "start": 1000,
+      "end": 999,
+      "probability": 0.07
+    },
+    {
+      "start": 1000,
+      "end": 1999,
+      "probability": 0.06
+    },
+    {
+      "start": 2000,
+      "end": 2999,
+      "probability": 0.07
+    },
+    {
+      "start": 3000,
+      "end": 3999,
+      "probability": 0.06
+    },
+    {
+      "start": 4000,
+      "end": 4999,
+      "probability": 0.07
+    },
+    {
+      "start": 5000,
+      "end": 5999,
+      "probability": 0.07
+    },
+    {
+      "start": 6000,
+      "end": 6999,
+      "probability": 0.07
+    },
+    {
+      "start": 7000,
+      "end": 7999,
+      "probability": 0.06
+    },
+    {
+      "start": 8000,
+      "end": 8999,
+      "probability": 0.07
+    },
+    {
+      "start": 9000,
+      "end": 9999,
+      "probability": 0.07
+    },
+    {
+      "start": 10000,
+      "end": 10999,
+      "probability": 0.06
+    },
+    {
+      "start": 11000,
+      "end": 11999,
+      "probability": 0.07
+    },
+    {
+      "start": 12000,
+      "end": 12999,
+      "probability": 0.07
+    },
+    {
+      "start": 13000,
+      "end": 13999,
+      "probability": 0.06
+    },
+    {
+      "start": 14000,
+      "end": 14999,
+      "probability": 0.07
+    }
+  ],
+  "bucket_refill_feerate": 1499.5,
+  "bucket_refill_probability": 0.1
+}

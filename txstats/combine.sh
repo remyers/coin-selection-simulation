@@ -1,0 +1,16 @@
+tail --lines=+2 "API-specific Fee Estimation-data-bitcond-20min-2304.csv" > bitcoind-20min-2304-2404.csv
+tail --lines=+2  "API-specific Fee Estimation-data-bitcond-20min-2305.csv" >> bitcoind-20min-2304-2404.csv
+tail --lines=+2  "API-specific Fee Estimation-data-bitcond-20min-2306.csv" >> bitcoind-20min-2304-2404.csv
+tail --lines=+2  "API-specific Fee Estimation-data-bitcond-20min-2307.csv" >> bitcoind-20min-2304-2404.csv
+tail --lines=+2  "API-specific Fee Estimation-data-bitcond-20min-2308.csv" >> bitcoind-20min-2304-2404.csv
+tail --lines=+2  "API-specific Fee Estimation-data-bitcond-20min-2409.csv" >> bitcoind-20min-2304-2404.csv
+tail --lines=+2  "API-specific Fee Estimation-data-bitcond-20min-2310.csv" >> bitcoind-20min-2304-2404.csv
+tail --lines=+2  "API-specific Fee Estimation-data-bitcond-20min-2311.csv" >> bitcoind-20min-2304-2404.csv
+tail --lines=+2  "API-specific Fee Estimation-data-bitcond-20min-2312.csv" >> bitcoind-20min-2304-2404.csv
+tail --lines=+2  "API-specific Fee Estimation-data-bitcond-20min-2401.csv" >> bitcoind-20min-2304-2404.csv
+tail --lines=+2  "API-specific Fee Estimation-data-bitcond-20min-2402.csv" >> bitcoind-20min-2304-2404.csv
+tail --lines=+2  "API-specific Fee Estimation-data-bitcond-20min-2403.csv" >> bitcoind-20min-2304-2404.csv
+tail --lines=+2  "API-specific Fee Estimation-data-bitcond-20min-2404.csv" >> bitcoind-20min-2304-2404.csv
+cut -d, -f2 bitcoind-20min-2304-2404.csv | awk '{$1=$1*1000/100000000.0;if ($1>0.0) print sprintf("%0.08f", $1)}' > bitcoind-20min-2304-2404-1-2_blocks.csv
+cut -d, -f3 bitcoind-20min-2304-2404.csv | awk '{$1=$1*1000/100000000.0;if ($1>0.0) print sprintf("%0.08f", $1)}' > bitcoind-20min-2304-2404-3_blocks.csv
+cut -d, -f4 bitcoind-20min-2304-2404.csv | awk '{$1=$1*1000/100000000.0;if ($1>0.0) print sprintf("%0.08f", $1)}' > bitcoind-20min-2304-2404-6_blocks.csv

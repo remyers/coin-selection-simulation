@@ -1,0 +1,92 @@
+{
+    "buckets": [
+        {
+            "start_satoshis": 10000,
+            "target_utxo_percent": 0.66
+        },
+        {
+            "start_satoshis": 50000,
+            "target_utxo_percent": 0.22
+        },
+        {
+            "start_satoshis": 200000,
+            "target_utxo_percent": 0.10
+        },
+        {
+            "start_satoshis": 1000000,
+            "target_utxo_percent": 0.02
+        }
+    ],
+    "bucket_refill_feerate": 5000,
+  "feerates_satoshis_per_kvbyte": [
+    {
+      "feerate": 1499,
+      "target_count": 100
+    },
+    {
+      "feerate": 2119,
+      "target_count": 100
+    },
+    {
+      "feerate": 2926,
+      "target_count": 100
+    },
+    {
+      "feerate": 4025,
+      "target_count": 100
+    },
+    {
+      "feerate": 5665,
+      "target_count": 100
+    },
+    {
+      "feerate": 7933,
+      "target_count": 100
+    },
+    {
+      "feerate": 10909,
+      "target_count": 100
+    },
+    {
+      "feerate": 15103,
+      "target_count": 100
+    },
+    {
+      "feerate": 20796,
+      "target_count": 100
+    },
+    {
+      "feerate": 28579,
+      "target_count": 100
+    },
+    {
+      "feerate": 39702,
+      "target_count": 100
+    },
+    {
+      "feerate": 54847,
+      "target_count": 100
+    },
+    {
+      "feerate": 75775,
+      "target_count": 100
+    },
+    {
+      "feerate": 104163,
+      "target_count": 100
+    },
+    {
+      "feerate": 143381,
+      "target_count": 100
+    },
+    {
+      "feerate": 200214,
+      "target_count": 100
+    },
+    {
+      "feerate": 296599,
+      "target_count": 100
+    }
+  ]
+
+}
