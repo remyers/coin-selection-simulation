@@ -7,7 +7,6 @@ from decimal import Decimal, ROUND_DOWN, ROUND_UP
 import numpy as np
 import json
 import os
-from statistics import mean
 
 COIN = 100000000
 
@@ -223,7 +222,6 @@ with open(args.scenario) as scenario_file:
     # cost to add a taproot output
     failures = []
     scenarioreader = csv.reader(scenario_file, delimiter=',', quotechar='"')
-    next(scenarioreader)
 
     min_total_fees = 0
     simple_total_fees = 0
@@ -280,8 +278,6 @@ with open(args.scenario) as scenario_file:
             amount_needed = spend + tx_fee
             capacity,_ = next_change_target(target_counts, sorted_utxos[-1])
             refill = feerate < to_coin(bucket_refill_feerate) and capacity < 0.7
-
-
 
             # find smallest utxo that is greater than the amount needed to fund the spend
             if refill:
@@ -376,8 +372,9 @@ with open(args.scenario) as scenario_file:
             last_changeless = Decimal(100*(len(changeless_txs)-last_changeless_txs)/(len(with_change_txs)+len(changeless_txs)-last_total_txs)).quantize(Decimal('0.01'))
             print(f"{count}: utxos: {len(utxos)}, avg_capacity: {avg_capacity}%, extra_fees: {extra_fees}%, changeless: {changeless}%, changeless (last 100): {last_changeless}%")
             last_changeless_txs = len(changeless_txs)
-            last_total_txs = len(with_change_txs) + len(changeless_txs) 
-            
+            last_total_txs = len(with_change_txs) + len(changeless_txs)
+            tmp_counts = np.unique([c['count'] for c in target_counts])
+            print(f"target_counts: {tmp_counts}")
 
     total_pending_utxo_value = 0
     for tx in pending_txs:
